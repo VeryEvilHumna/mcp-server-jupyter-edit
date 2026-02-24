@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
@@ -54,8 +54,21 @@ pub fn backup_notebook<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
         anyhow::bail!("Cannot backup, file does not exist: {}", path.display());
     }
 
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let backup_dir = parent.join(".jupyter-edit-backups");
+
+    if !backup_dir.exists() {
+        fs::create_dir(&backup_dir)
+            .with_context(|| format!("Cannot create backup directory: {}", backup_dir.display()))?;
+    }
+
+    let filename = path.file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("Invalid filename: {}", path.display()))?;
+
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let backup_path = path.with_extension(format!("ipynb.bak.{}", timestamp));
+    let backup_filename = format!("{}.{timestamp}.ipynb", filename.trim_end_matches(".ipynb"));
+    let backup_path = backup_dir.join(backup_filename);
 
     fs::copy(path, &backup_path)
         .with_context(|| format!("Cannot create backup: {}", backup_path.display()))?;

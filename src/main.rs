@@ -33,6 +33,10 @@ impl JupyterEditService {
 struct ReadNotebookParams {
     #[schemars(description = "Absolute path to .ipynb file")]
     path: String,
+    #[schemars(description = "Maximum number of lines to return (default: 100, set to null for no limit)")]
+    limit: Option<usize>,
+    #[schemars(description = "Number of lines to skip from the beginning (default: 0)")]
+    offset: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -67,6 +71,8 @@ struct AddCellParams {
     content: String,
     #[schemars(description = "Insert after this cell ID; if omitted, add at end")]
     after_cell_id: Option<String>,
+    #[schemars(description = "Insert after this index (0-based); if omitted, add at end")]
+    after_index: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -91,7 +97,11 @@ struct DeleteCellParams {
 impl JupyterEditService {
     #[tool(description = "Read a Jupyter notebook and convert to LLM-friendly markdown format")]
     async fn read_notebook(&self, params: Parameters<ReadNotebookParams>) -> Result<CallToolResult, McpError> {
-        tools::read_notebook(tools::ReadNotebookRequest { path: params.0.path })
+        tools::read_notebook(tools::ReadNotebookRequest {
+            path: params.0.path,
+            limit: params.0.limit,
+            offset: params.0.offset,
+        })
             .map(|s| CallToolResult::success(vec![Content::text(s)]))
             .map_err(|e| McpError::invalid_request(e.to_string(), None))
     }
@@ -139,6 +149,7 @@ impl JupyterEditService {
             cell_type: params.0.cell_type,
             content: params.0.content,
             after_cell_id: params.0.after_cell_id,
+            after_index: params.0.after_index,
         })
         .map(|r| CallToolResult::success(vec![Content::text(r.message)]))
         .map_err(|e| McpError::invalid_request(e.to_string(), None))

@@ -3,7 +3,7 @@ use regex::Regex;
 
 use crate::notebook::{Cell, CellType, Notebook, Output};
 
-pub fn notebook_to_llm_format(notebook: &Notebook, filename: Option<&str>) -> String {
+pub fn notebook_to_llm_format(notebook: &Notebook, filename: Option<&str>, limit: Option<usize>, offset: Option<usize>) -> String {
     let mut output = String::new();
 
     output.push_str(&format!(
@@ -66,7 +66,35 @@ pub fn notebook_to_llm_format(notebook: &Notebook, filename: Option<&str>) -> St
         output.push_str("\n---\n\n");
     }
 
-    output
+    apply_line_limit(output, limit, offset)
+}
+
+fn apply_line_limit(output: String, limit: Option<usize>, offset: Option<usize>) -> String {
+    match (limit, offset) {
+        (None, None) => output,
+        _ => {
+            let lines: Vec<&str> = output.lines().collect();
+            let offset_idx = offset.unwrap_or(0);
+            
+            let lines_to_use = if let Some(lim) = limit {
+                if offset_idx + lim >= lines.len() {
+                    if offset_idx >= lines.len() {
+                        return String::new();
+                    }
+                    &lines[offset_idx..]
+                } else {
+                    &lines[offset_idx..offset_idx + lim]
+                }
+            } else {
+                if offset_idx >= lines.len() {
+                    return String::new();
+                }
+                &lines[offset_idx..]
+            };
+
+            lines_to_use.join("\n") + "\n"
+        }
+    }
 }
 
 pub fn format_single_cell(cell: &Cell, notebook: &Notebook) -> String {

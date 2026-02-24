@@ -9,6 +9,13 @@ use crate::notebook::{Cell, CellType};
 #[derive(Debug, Deserialize)]
 pub struct ReadNotebookRequest {
     pub path: String,
+    #[serde(default = "default_limit")]
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+fn default_limit() -> Option<usize> {
+    Some(100)
 }
 
 pub fn read_notebook(req: ReadNotebookRequest) -> Result<String> {
@@ -16,7 +23,7 @@ pub fn read_notebook(req: ReadNotebookRequest) -> Result<String> {
     let filename = Path::new(&req.path)
         .file_name()
         .and_then(|n| n.to_str());
-    Ok(notebook_to_llm_format(&notebook, filename))
+    Ok(notebook_to_llm_format(&notebook, filename, req.limit, req.offset))
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,6 +119,7 @@ pub struct AddCellRequest {
     pub cell_type: String,
     pub content: String,
     pub after_cell_id: Option<String>,
+    pub after_index: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -130,7 +138,12 @@ pub fn add_cell(req: AddCellRequest) -> Result<AddCellResponse> {
 
     let mut notebook = read_notebook_file(&req.path)?;
 
-    let insert_index = if let Some(after_id) = &req.after_cell_id {
+    let insert_index = if let Some(index) = req.after_index {
+        if index > notebook.cells.len() {
+            anyhow::bail!("Index {} is out of bounds (max: {})", index, notebook.cells.len());
+        }
+        index
+    } else if let Some(after_id) = &req.after_cell_id {
         let pos = notebook
             .cells
             .iter()
